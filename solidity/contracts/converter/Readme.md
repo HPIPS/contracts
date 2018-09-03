@@ -229,7 +229,7 @@ BancorConverter 继承:IBancorConverter, SmartTokenController, Managed, Contract
         _;
 	}
 
-  // validates conversion fee（验证转换费）
+  	// validates conversion fee（验证转换费）
   
     modifier validConversionFee(uint32 _conversionFee) {
         require(_conversionFee >= 0 && _conversionFee <= maxConversionFee);
