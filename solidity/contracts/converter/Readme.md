@@ -95,7 +95,9 @@ BancorConverter源码分析
 
 BancorConverter 继承:IBancorConverter, SmartTokenController, Managed, ContractIds, FeatureIds属性
 
+
 uint32 private constant MAX_WEIGHT = 1000000;
+
 uint64 private constant MAX_CONVERSION_FEE = 1000000;
 
 struct Connector {
@@ -107,26 +109,37 @@ struct Connector {
 }
 
 string public version = '0.10';
+
 string public converterType = 'bancor';
 
+
  IContractRegistry public registry;                  // contract registry contract（合同相互登记）
+ 
  IWhitelist public conversionWhitelist;              // whitelist contract with list of addresses that are allowed to use the converter（与允许使用转换器的地址列表的白名单契约）
+ 
  IERC20Token[] public connectorTokens;               // ERC20 standard token addresses（Erc20标准令牌地址 ）
+ 
  IERC20Token[] public quickBuyPath;                  // conversion path that's used in order to buy the token with ETH（使用ETH购买令牌的转换路径）
+ 
  mapping (address => Connector) public connectors;   // connector token addresses -> connector data（连接器令牌地址>连接器数据）
+ 
  uint32 private totalConnectorWeight = 0;            // used to efficiently prevent increasing the total connector weight above 100%（用于有效防止总连接器重量增加到100%以上）
+ 
  uint32 public maxConversionFee = 0;                 // maximum conversion fee for the lifetime of the contract,
                                                         // represented in ppm, 0...1000000 (0 = no fee, 100 = 0.01%, 1000000 = 100%)（合同期限内的最大转换费用，以PPM表示，0…1000000（0＝无费用，100＝0.01%，1000000＝100%）。 ）
+							
  uint32 public conversionFee = 0;                    // current conversion fee, represented in ppm, 0...maxConversionFee（当前转换费，以PPM表示，0……最大转换费 ）
+ 
 bool public conversionsEnabled = true; 			// true if token conversions is enabled, false if not（如果启用令牌转换，则为false，如果不是）
 
 
 
 IERC20Token[] private convertPath;
 
+   
 
 
-   // triggered when a conversion between two tokens occurs(Token转换时候的触发事件)
+    // triggered when a conversion between two tokens occurs(Token转换时候的触发事件)
     event Conversion(
         address indexed _fromToken,
         address indexed _toToken,
@@ -144,7 +157,7 @@ IERC20Token[] private convertPath;
         uint32 _connectorWeight
 	);
 
-// triggered when the conversion fee is updated (费用更新时候触发事件)
+    // triggered when the conversion fee is updated (费用更新时候触发事件)
 	event ConversionFeeUpdate(uint32 _prevFee, uint32 _newFee);
 
 
@@ -156,7 +169,7 @@ IERC20Token[] private convertPath;
         @param  _maxConversionFee   maximum conversion fee, represented in ppm（最大转换费，以PPM表示 ）
         @param  _connectorToken     optional, initial connector, allows defining the first connector at deployment time（可选的初始连接器，允许在部署时定义第一个连接器。）
         @param  _connectorWeight    optional, weight for the initial connector（可选的，初始连接器的重量）
-    */
+    **/
     constructor(
         ISmartToken _token,
         IContractRegistry _registry,
@@ -184,24 +197,28 @@ IERC20Token[] private convertPath;
 
 
     // validates a connector token address - verifies that the address belongs to one of the connector tokens（验证连接器令牌地址验证地址属于连接器令牌之一。）
+    
     modifier validConnector(IERC20Token _address) {
         require(connectors[_address].isSet);
         _;
 	}
 
 	// validates a token address - verifies that the address belongs to one of the convertible tokens（验证令牌地址-验证地址属于可转换令牌之一。）
+	
     modifier validToken(IERC20Token _address) {
         require(_address == token || connectors[_address].isSet);
         _;
 }
 
     // validates maximum conversion fee（验证最大转换费）
+    
     modifier validMaxConversionFee(uint32 _conversionFee) {
         require(_conversionFee >= 0 && _conversionFee <= MAX_CONVERSION_FEE);
         _;
 }
 
   // validates conversion fee（验证转换费）
+  
     modifier validConversionFee(uint32 _conversionFee) {
         require(_conversionFee >= 0 && _conversionFee <= maxConversionFee);
         _;
@@ -214,38 +231,44 @@ IERC20Token[] private convertPath;
 }
 
     // validates a conversion path - verifies that the number of elements is odd and that maximum number of 'hops' is 10（验证转换路径-验证元素的数目是奇数的，并且“跳数”的最大数目是10）
+    
     modifier validConversionPath(IERC20Token[] _path) {
         require(_path.length > 2 && _path.length <= (1 + 2 * 10) && _path.length % 2 == 1);
         _;
 }
 
-// allows execution only when conversions aren't disabled（仅当转换未禁用时才允许执行）
-    modifier conversionsAllowed {
-        assert(conversionsEnabled);
-        _;
-    }
+	// allows execution only when conversions aren't disabled（仅当转换未禁用时才允许执行）
+
+   	 modifier conversionsAllowed {
+        	assert(conversionsEnabled);
+       		 _;
+    	}
 
 
     // allows execution by the BancorNetwork contract only（允许仅由BANCORNET契约执行）
+    
     modifier bancorNetworkOnly {
         IBancorNetwork bancorNetwork = IBancorNetwork(registry.addressOf(ContractIds.BANCOR_NETWORK));
         require(msg.sender == address(bancorNetwork));
         _;
-}
+	}
 
 
     /**
         @dev returns the number of connector tokens defined（返回定义的连接器令牌的数量）
         @return number of connector tokens（连接器令牌返回数）
     */
+    
     function connectorTokenCount() public view returns (uint16) {
         return uint16(connectorTokens.length);
-}
+	}
+
 
 	/*
         @dev allows the owner to update the contract registry contract address（允许所有者更新合同注册表合同地址）
         @param _registry   address of a contract registry contract（合同登记合同地址）
     	*/
+	
     function setRegistry(IContractRegistry _registry)
         public
         ownerOnly
@@ -259,12 +282,7 @@ IERC20Token[] private convertPath;
     /*
         @dev allows the owner to update & enable the conversion whitelist contract address
         when set, only addresses that are whitelisted are actually allowed to use the converter
-        note that the whitelist check is actually done by the BancorNetwork contract
-（允许所有者更新和启用转换白名单契约地址
-
-当设置时，只允许使用白名单的地址使用转换器。
-
-注意，白名单检查实际上是由BANCORNET契约完成的。）
+        note that the whitelist check is actually done by the BancorNetwork contract（允许所有者更新和启用转换白名单契约地址当设置时，只允许使用白名单的地址使用转换器。注意，白名单检查实际上是由BANCORNET契约完成的。）
         @param _whitelist    address of a whitelist contract（白名单合同地址）
     */
     function setConversionWhitelist(IWhitelist _whitelist)
@@ -273,13 +291,14 @@ IERC20Token[] private convertPath;
         notThis(_whitelist)
     {
         conversionWhitelist = _whitelist;
-}
+	}
 
 
 	/*
         @dev allows the manager to update the quick buy path（允许管理员更新快速购买路径）
         @param _path    new quick buy path, see conversion path format in the bancorNetwork contract（新的快速购买路径，参见BANCORNET合同中的转换路径格式）
     	*/
+	
     function setQuickBuyPath(IERC20Token[] _path)
         public
         ownerOnly
@@ -301,5 +320,5 @@ IERC20Token[] private convertPath;
     */
     function getQuickBuyPathLength() public view returns (uint256) {
         return quickBuyPath.length;
-}
+	}
 
