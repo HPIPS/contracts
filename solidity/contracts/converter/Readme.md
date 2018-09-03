@@ -1,62 +1,69 @@
 ################################################
 ### IBancorConverter 对象
+
 关联对象
+
 IERC20Token;
+
 IWhitelist;
 
 
-/**
-        @dev returns the expected return for converting a specific amount of _fromToken to _toToken（返回将特定金额从令牌转换为IO到令牌的预期回报）
+	/**
+	@dev returns the expected return for converting a specific amount of _fromToken to _toToken（返回将特定金额从令牌转换为IO到令牌的预期回报）
+	
         @param _fromToken  ERC20 token to convert from
         @param _toToken    ERC20 token to convert to
         @param _amount     amount to convert, in fromToken（从FoT中转换的金额）
         @return expected conversion return amount（返回预期转换收益金额）
-*/
-function getReturn(IERC20Token _fromToken, IERC20Token _toToken, uint256 _amount) public view returns (uint256);
+	*/
+	function getReturn(IERC20Token _fromToken, IERC20Token _toToken, uint256 _amount) public view returns (uint256);
 
-/**
+	/**
         @dev converts a specific amount of _fromToken to _toToken（将一个特定量的从）
         @param _fromToken  ERC20 token to convert from
         @param _toToken    ERC20 token to convert to
         @param _amount     amount to convert, in fromToken  （从FoT中转换的金额）
         @param _minReturn  if the conversion results in an amount smaller than the minimum return - it is cancelled, must be nonzero（如果转换结果小于最小返回量，则被取消，必须为非零。）
         @return conversion return amount（返回转换返回量）
-*/
-function convert(IERC20Token _fromToken, IERC20Token _toToken, uint256 _amount, uint256 _minReturn) public returns (uint256);
+	*/
+	function convert(IERC20Token _fromToken, IERC20Token _toToken, uint256 _amount, uint256 _minReturn) public returns (uint256);
 
 
-function conversionWhitelist() public view returns (IWhitelist) {}
-function conversionFee() public view returns (uint32) {}
-function connectors(address _address) public view returns (uint256, uint32, bool, bool, bool) {}
-function getConnectorBalance(IERC20Token _connectorToken) public view returns (uint256);
-function change(IERC20Token _fromToken, IERC20Token _toToken, uint256 _amount, uint256 _minReturn) public returns (uint256);
+	function conversionWhitelist() public view returns (IWhitelist) {}
+	function conversionFee() public view returns (uint32) {}
+	function connectors(address _address) public view returns (uint256, uint32, bool, bool, bool) {}
+	function getConnectorBalance(IERC20Token _connectorToken) public view returns (uint256);
+	function change(IERC20Token _fromToken, IERC20Token _toToken, uint256 _amount, uint256 _minReturn) public returns (uint256);
 
 #################################################
 ### IBancorConverterFactory 对象
 关联对象
-IERC20Token;
-ISmartToken;
-IContractRegistry；
 
-function createConverter(
+	IERC20Token;
+
+	ISmartToken;
+
+	IContractRegistry；
+
+	function createConverter(
         ISmartToken _token,
         IContractRegistry _registry,
         uint32 _maxConversionFee,
         IERC20Token _connectorToken,
         uint32 _connectorWeight
-    )
-public returns (address);
+    	)
+	public returns (address);
 ###################################################
 ### IBancorFormula  对象
 
-function calculatePurchaseReturn(uint256 _supply, uint256 _connectorBalance, uint32 _connectorWeight, uint256 _depositAmount) public view returns (uint256);
-function calculateSaleReturn(uint256 _supply, uint256 _connectorBalance, uint32 _connectorWeight, uint256 _sellAmount) public view returns (uint256);
-function calculateCrossConnectorReturn(uint256 _fromConnectorBalance, uint32 _fromConnectorWeight, uint256 _toConnectorBalance, uint32 _toConnectorWeight, uint256 _amount) public view returns (uint256);
+	function calculatePurchaseReturn(uint256 _supply, uint256 _connectorBalance, uint32 _connectorWeight, uint256 _depositAmount) public view returns (uint256);
+	function calculateSaleReturn(uint256 _supply, uint256 _connectorBalance, uint32 _connectorWeight, uint256 _sellAmount) public view returns (uint256);
+	function calculateCrossConnectorReturn(uint256 _fromConnectorBalance, uint32 _fromConnectorWeight, uint256 _toConnectorBalance, uint32 _toConnectorWeight, uint256 _amount) public view returns (uint256);
 #########################################
 ### IBancorGasPriceLimit  对象
 
-function gasPrice() public view returns (uint256) {}
-function validateGasPrice(uint256) public view;
+	function gasPrice() public view returns (uint256) {}
+	function validateGasPrice(uint256) public view;
 
 
 ### IBancorConverter (源码)
@@ -64,41 +71,41 @@ function validateGasPrice(uint256) public view;
 
 BANCOR变换器V0.10
 
-令牌转换器的BANCOR版本允许在智能令牌和其他Erc20令牌之间以及在不同的Erc20令牌和它们自己之间进行转换。
+	令牌转换器的BANCOR版本允许在智能令牌和其他Erc20令牌之间以及在不同的Erc20令牌和它们自己之间进行转换。
 
-ErC20连接器的平衡可以是虚拟的，这意味着计算是基于虚拟平衡而不是依靠。
+	ErC20连接器的平衡可以是虚拟的，这意味着计算是基于虚拟平衡而不是依靠。
 
-实际连接器平衡。这是一种安全机制，可以防止在单个合同中保持非常大的（和有价值的）平衡。
+	实际连接器平衡。这是一种安全机制，可以防止在单个合同中保持非常大的（和有价值的）平衡。
 
-转换器是可升级的（就像任何StasktoKeNo控制器）一样。
+	转换器是可升级的（就像任何StasktoKeNo控制器）一样。
 
-警告：不建议使用具有小于8小数位数的智能令牌的转换器。
+	警告：不建议使用具有小于8小数位数的智能令牌的转换器。
 
-或由于精度损失而具有非常小的数目
+	或由于精度损失而具有非常小的数目
 
-开放性问题：
+	开放性问题：
 
-前面运行的攻击目前被下列机制减轻：
+	前面运行的攻击目前被下列机制减轻：
 
-每个转换的最小返回参数提供了一种定义事务的最小/最大价格的方法。
+	每个转换的最小返回参数提供了一种定义事务的最小/最大价格的方法。
 
-气体价格限制防止用户对执行命令的控制
+	气体价格限制防止用户对执行命令的控制
 
-如果交易来自可信的白名单签名者，则可以跳过气体价格限制检查。
+	如果交易来自可信的白名单签名者，则可以跳过气体价格限制检查。
 
-其他潜在的解决方案可能包括基于提交/披露的方案。
+	其他潜在的解决方案可能包括基于提交/披露的方案。
 
--可能为连接器字段添加吸气剂，这样客户端就不必依赖于结构中的顺序。
+	-可能为连接器字段添加吸气剂，这样客户端就不必依赖于结构中的顺序。
 
-BancorConverter源码分析
+### BancorConverter源码分析
 
 
 BancorConverter 继承:IBancorConverter, SmartTokenController, Managed, ContractIds, FeatureIds属性
 
 
-uint32 private constant MAX_WEIGHT = 1000000;
+	uint32 private constant MAX_WEIGHT = 1000000;
 
-uint64 private constant MAX_CONVERSION_FEE = 1000000;
+	uint64 private constant MAX_CONVERSION_FEE = 1000000;
 
 	struct Connector {
 
