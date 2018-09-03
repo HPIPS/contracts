@@ -1,4 +1,8 @@
-﻿# Bancor Protocol Contracts v0.4 (alpha)
+﻿HPIPS发起在NULS上面开发Bancor交易协议的说明文档，项目又原始的https://github.com/bancorprotocol/contracts项目0.4版本分叉过来
+ 
+HPIPS initiated the development of Bancor transaction protocol documentation on NULS, and the original https://github.com/bancor protocol/contracts project was split by version 0.4.
+
+ # Bancor Protocol Contracts v0.4 (alpha)
 
 Bancor is a decentralized liquidity network that provides users with a simple, low-cost way to buy and sell tokens. Bancor’s open-source protocol empowers tokens with built-in convertibility directly through their smart contracts, allowing integrated tokens to be instantly converted for one another, without needing to match buyers and sellers in an exchange. The Bancor Wallet enables automated token conversions directly from within the wallet, at prices that are more predictable than exchanges and resistant to manipulation. To convert tokens instantly, including ETH, EOS, DAI and more, visit the [Bancor Web App](https://www.bancor.network/communities/5a780b3a287443a5cdea2477?utm_source=social&utm_medium=github&utm_content=readme), join the [Bancor Telegram group](https://t.me/bancor) or read the Bancor Protocol™ [Whitepaper](https://www.bancor.network/whitepaper) for more information.
 
