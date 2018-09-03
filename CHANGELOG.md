@@ -1,4 +1,10 @@
-﻿### 0.4.3 (2018-06-23)
+### 0.4.3-NULS（2018-09-03）
+
+分叉原始的Bancor项目，开发NULS项目的Bancor协议
+
+Split the original Bancor project and develop the Bancor protocol for NULS projects.
+
+### 0.4.3 (2018-06-23)
 General:
 * Upgraded compiler version to 0.4.23
 * Updated all contracts to make use of the new `constructor` keyword
