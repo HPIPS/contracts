@@ -100,41 +100,46 @@ uint32 private constant MAX_WEIGHT = 1000000;
 
 uint64 private constant MAX_CONVERSION_FEE = 1000000;
 
-struct Connector {
+	struct Connector {
+
         uint256 virtualBalance;         // connector virtual balance（资产表的链接）
+	
         uint32 weight;                  // connector weight, represented in ppm, 1-1000000（连接器权值，以PPM表示）
+	
         bool isVirtualBalanceEnabled;   // true if virtual balance is enabled, false if not（如果可以启动是true，如果不是则为false）
+	
         bool isPurchaseEnabled;         // is purchase of the smart token enabled with the connector, can be set by the owner（可以由所有者设置，是否开始智能令牌的购买）
+	
         bool isSet;                     // used to tell if the mapping element is defined（判断交易是否继续）
-}
+	}
 
-string public version = '0.10';
+	string public version = '0.10';
 
-string public converterType = 'bancor';
+	string public converterType = 'bancor';
 
 
- IContractRegistry public registry;                  // contract registry contract（合同相互登记）
+ 	IContractRegistry public registry;                  // contract registry contract（合同相互登记）
  
- IWhitelist public conversionWhitelist;              // whitelist contract with list of addresses that are allowed to use the converter（与允许使用转换器的地址列表的白名单契约）
+ 	IWhitelist public conversionWhitelist;              // whitelist contract with list of addresses that are allowed to use the 		converter（与允许使用转换器的地址列表的白名单契约）
  
- IERC20Token[] public connectorTokens;               // ERC20 standard token addresses（Erc20标准令牌地址 ）
+ 	IERC20Token[] public connectorTokens;               // ERC20 standard token addresses（Erc20标准令牌地址 ）
  
- IERC20Token[] public quickBuyPath;                  // conversion path that's used in order to buy the token with ETH（使用ETH购买令牌的转换路径）
+ 	IERC20Token[] public quickBuyPath;                  // conversion path that's used in order to buy the token with ETH（使用ETH购买令牌的转换路径）
  
- mapping (address => Connector) public connectors;   // connector token addresses -> connector data（连接器令牌地址>连接器数据）
+	 mapping (address => Connector) public connectors;   // connector token addresses -> connector data（连接器令牌地址>连接器数据）
  
- uint32 private totalConnectorWeight = 0;            // used to efficiently prevent increasing the total connector weight above 100%（用于有效防止总连接器重量增加到100%以上）
+	 uint32 private totalConnectorWeight = 0;            // used to efficiently prevent increasing the total connector weight above 100%（用于有效防止总连接器重量增加到100%以上）
  
- uint32 public maxConversionFee = 0;                 // maximum conversion fee for the lifetime of the contract,
+	 uint32 public maxConversionFee = 0;                 // maximum conversion fee for the lifetime of the contract,
                                                         // represented in ppm, 0...1000000 (0 = no fee, 100 = 0.01%, 1000000 = 100%)（合同期限内的最大转换费用，以PPM表示，0…1000000（0＝无费用，100＝0.01%，1000000＝100%）。 ）
 							
- uint32 public conversionFee = 0;                    // current conversion fee, represented in ppm, 0...maxConversionFee（当前转换费，以PPM表示，0……最大转换费 ）
+ 	uint32 public conversionFee = 0;                    // current conversion fee, represented in ppm, 0...maxConversionFee（当前转换费，以PPM表示，0……最大转换费 ）
  
-bool public conversionsEnabled = true; 			// true if token conversions is enabled, false if not（如果启用令牌转换，则为false，如果不是）
+	bool public conversionsEnabled = true; 			// true if token conversions is enabled, false if not（如果启用令牌转换，则为false，如果不是）
 
 
 
-IERC20Token[] private convertPath;
+	IERC20Token[] private convertPath;
 
    
 
@@ -193,7 +198,7 @@ IERC20Token[] private convertPath;
 
         if (_connectorToken != address(0))
             addConnector(_connectorToken, _connectorWeight, false);
-}
+	}
 
 
     // validates a connector token address - verifies that the address belongs to one of the connector tokens（验证连接器令牌地址验证地址属于连接器令牌之一。）
@@ -208,34 +213,34 @@ IERC20Token[] private convertPath;
     modifier validToken(IERC20Token _address) {
         require(_address == token || connectors[_address].isSet);
         _;
-}
+	}
 
     // validates maximum conversion fee（验证最大转换费）
     
     modifier validMaxConversionFee(uint32 _conversionFee) {
         require(_conversionFee >= 0 && _conversionFee <= MAX_CONVERSION_FEE);
         _;
-}
+	}
 
   // validates conversion fee（验证转换费）
   
     modifier validConversionFee(uint32 _conversionFee) {
         require(_conversionFee >= 0 && _conversionFee <= maxConversionFee);
         _;
-}
+	}
 
     // validates connector weight range（验证连接器的宽度范围）
     modifier validConnectorWeight(uint32 _weight) {
         require(_weight > 0 && _weight <= MAX_WEIGHT);
         _;
-}
+	}
 
     // validates a conversion path - verifies that the number of elements is odd and that maximum number of 'hops' is 10（验证转换路径-验证元素的数目是奇数的，并且“跳数”的最大数目是10）
     
     modifier validConversionPath(IERC20Token[] _path) {
         require(_path.length > 2 && _path.length <= (1 + 2 * 10) && _path.length % 2 == 1);
         _;
-}
+	}
 
 	// allows execution only when conversions aren't disabled（仅当转换未禁用时才允许执行）
 
@@ -296,7 +301,7 @@ IERC20Token[] private convertPath;
 
 	/*
         @dev allows the manager to update the quick buy path（允许管理员更新快速购买路径）
-        @param _path    new quick buy path, see conversion path format in the bancorNetwork contract（新的快速购买路径，参见BANCORNET合同中的转换路径格式）
+        @param _path    new quick buy path, see conversion path format in the bancorNetwork contract（新的快速购买路径，参见BANCORNET合同	中的转换路径格式）
     	*/
 	
     function setQuickBuyPath(IERC20Token[] _path)
