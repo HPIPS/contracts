@@ -333,4 +333,274 @@ BancorConverter 继承:IBancorConverter, SmartTokenController, Managed, Contract
     function getQuickBuyPathLength() public view returns (uint256) {
         return quickBuyPath.length;
 	}
+	
+ 	/**
+        @dev disables the entire conversion functionality
+        this is a safety mechanism in case of a emergency
+        can only be called by the manager  (禁用整个转换功能。这是一种安全机制，在紧急情况下只能由管理者调用)
+        @param _disable true to disable conversions, false to re-enable them (true禁用转换,false重新启用它们)
+    */
+    function disableConversions(bool _disable) public ownerOrManagerOnly {
+        conversionsEnabled = !_disable;
+	}
+
+	/**
+        @dev updates the current conversion fee
+        can only be called by the manager (更新当前转换费只能由经理调用)
+        @param _conversionFee new conversion fee, represented in ppm(新的转换费，以PPM表示)
+    	*/
+    function setConversionFee(uint32 _conversionFee)
+        public
+        ownerOrManagerOnly
+        validConversionFee(_conversionFee)
+    {
+        emit ConversionFeeUpdate(conversionFee, _conversionFee);
+        conversionFee = _conversionFee;
+	}
+
+	/*
+        @dev given a return amount, returns the amount minus the conversion fee(返回给定的数量，金额减去“归来”的转换 )
+        @param _amount      return amount(输出值)
+        @param _magnitude   1 for standard conversion, 2 for cross connector conversion（1用于标准转换，2用于交叉连接器转换）
+        @return return amount minus conversion fee（退还金额减去换算费）
+    	*/
+    function getFinalAmount(uint256 _amount, uint8 _magnitude) public view returns (uint256) {
+        return safeMul(_amount, (MAX_CONVERSION_FEE - conversionFee) ** _magnitude) / MAX_CONVERSION_FEE ** _magnitude;
+	}
+
+ 	/**
+        @dev defines a new connector for the token can only be called by the owner while the converter is inactive (定义一个新的连接器，令牌只能在转换器不活动时由所有者调用)
+        @param _token                  address of the connector token (连接器令牌地址)
+        @param _weight                 constant connector weight, represented in ppm, 1-1000000(恒定的连接器费用，以PPM表示，1-100000)
+        @param _enableVirtualBalance   true to enable virtual balance for the connector, false to disable it（如果要启用连接器的虚拟余额，请将其禁用）
+    	*/
+    function addConnector(IERC20Token _token, uint32 _weight, bool _enableVirtualBalance)
+        public
+        ownerOnly
+        inactive
+        validAddress(_token)
+        notThis(_token)
+        validConnectorWeight(_weight)
+    {
+        require(_token != token && !connectors[_token].isSet && totalConnectorWeight + _weight <= MAX_WEIGHT); // validate input
+
+        connectors[_token].virtualBalance = 0;
+        connectors[_token].weight = _weight;
+        connectors[_token].isVirtualBalanceEnabled = _enableVirtualBalance;
+        connectors[_token].isPurchaseEnabled = true;
+        connectors[_token].isSet = true;
+        connectorTokens.push(_token);
+        totalConnectorWeight += _weight;
+    }
+
+    /**
+        @dev updates one of the token connectors can only be called by the owner（更新其中一个令牌连接器 只能由所有者调用）
+        @param _connectorToken         address of the connector token（连接器令牌地址）
+        @param _weight                 constant connector weight, represented in ppm, 1-1000000（恒定的连接器费用，以PPM表示，1-100000）
+        @param _enableVirtualBalance   true to enable virtual balance for the connector, false to disable it（如果要启用连接器的虚拟余额，请将其禁用）
+        @param _virtualBalance         new connector's virtual balance（新连接器的虚拟平衡）
+    */
+    function updateConnector(IERC20Token _connectorToken, uint32 _weight, bool _enableVirtualBalance, uint256 _virtualBalance)
+        public
+        ownerOnly
+        validConnector(_connectorToken)
+        validConnectorWeight(_weight)
+    {
+        Connector storage connector = connectors[_connectorToken];
+        require(totalConnectorWeight - connector.weight + _weight <= MAX_WEIGHT); // validate input（验证输入）
+
+        totalConnectorWeight = totalConnectorWeight - connector.weight + _weight;
+        connector.weight = _weight;
+        connector.isVirtualBalanceEnabled = _enableVirtualBalance;
+        connector.virtualBalance = _virtualBalance;
+	}
+
+	/**
+        @dev disables purchasing with the given connector token in case the connector token got compromised
+        can only be called by the owner
+        note that selling is still enabled regardless of this flag and it cannot be disabled by the owner
+ 	（如果连接器令牌受损，则使用给定的连接器令牌进行购买的isables只能由所有者调用，因为销售仍然启用，而不管这个标志是什么，并且所有者不能禁用它）
+        @param _connectorToken  connector token contract address（连接器令牌合同地址）
+        @param _disable         true to disable the token, false to re-enable it（true 禁用令牌，false 使其重新启用）
+   	 */
+    function disableConnectorPurchases(IERC20Token _connectorToken, bool _disable)
+        public
+        ownerOnly
+        validConnector(_connectorToken)
+    {
+        connectors[_connectorToken].isPurchaseEnabled = !_disable;
+	}
+
+	/**
+        @dev returns the connector's virtual balance if one is defined, otherwise returns the actual balance（如果定义了一个连接器，则返回连接器的虚拟余额，否则返回实际余额）
+        @param _connectorToken  connector token contract address（连接器令牌合同地址）
+        @return connector balance（连接器平衡）
+    	*/
+    function getConnectorBalance(IERC20Token _connectorToken)
+        public
+        view
+        validConnector(_connectorToken)
+        returns (uint256)
+    {
+        Connector storage connector = connectors[_connectorToken];
+        return connector.isVirtualBalanceEnabled ? connector.virtualBalance : _connectorToken.balanceOf(this);
+	}
+
+	/**
+        @dev returns the expected return for converting a specific amount of _fromToken to _toToken（返回将特定金额从_fromToken令牌转换到 _toToken令牌的预期回报）
+        @param _fromToken  ERC20 token to convert from （Erc20令牌转换）
+        @param _toToken    ERC20 token to convert to（Erc20令牌获得）
+        @param _amount     amount to convert, in fromToken（从FoT中转换的金额）
+        @return expected conversion return amount（返回预期转换收益金额）
+    	*/
+    function getReturn(IERC20Token _fromToken, IERC20Token _toToken, uint256 _amount) public view returns (uint256) {
+        require(_fromToken != _toToken); // validate input（验证输入）
+
+        // conversion between the token and one of its connectors（令牌与其一个连接器之间的转换）
+        if (_toToken == token)
+            return getPurchaseReturn(_fromToken, _amount);
+        else if (_fromToken == token)
+            return getSaleReturn(_toToken, _amount);
+
+        // conversion between 2 connectors（2个连接器之间的转换）
+        return getCrossConnectorReturn(_fromToken, _toToken, _amount);
+	}
+
+	/**
+        @dev returns the expected return for buying the token for a connector token（返回购买连接器令牌令牌的预期收益）
+        @param _connectorToken  connector token contract address（连接器令牌合同地址）
+        @param _depositAmount   amount to deposit (in the connector token)（存款金额（在连接器令牌中））
+        @return expected purchase return amount（返回预期购买回报金额）
+    	*/
+    function getPurchaseReturn(IERC20Token _connectorToken, uint256 _depositAmount)
+        public
+        view
+        active
+        validConnector(_connectorToken)
+        returns (uint256)
+    {
+        Connector storage connector = connectors[_connectorToken];
+        require(connector.isPurchaseEnabled); // validate input
+
+        uint256 tokenSupply = token.totalSupply();
+        uint256 connectorBalance = getConnectorBalance(_connectorToken);
+        IBancorFormula formula = IBancorFormula(registry.addressOf(ContractIds.BANCOR_FORMULA));
+        uint256 amount = formula.calculatePurchaseReturn(tokenSupply, connectorBalance, connector.weight, _depositAmount);
+
+        // return the amount minus the conversion fee（退还金额减去转换费）
+        return getFinalAmount(amount, 1);
+	}
+
+    /**
+        @dev returns the expected return for selling the token for one of its connector tokens（返回为其连接器令牌之一出售令牌的预期收益）
+        @param _connectorToken  connector token contract address（连接器令牌合同地址）
+        @param _sellAmount      amount to sell (in the smart token)（出售金额（在智能令牌中））
+        @return expected sale return amount（预期销售返还金额）
+    */
+    function getSaleReturn(IERC20Token _connectorToken, uint256 _sellAmount)
+        public
+        view
+        active
+        validConnector(_connectorToken)
+        returns (uint256)
+    {
+        Connector storage connector = connectors[_connectorToken];
+        uint256 tokenSupply = token.totalSupply();
+        uint256 connectorBalance = getConnectorBalance(_connectorToken);
+        IBancorFormula formula = IBancorFormula(registry.addressOf(ContractIds.BANCOR_FORMULA));
+        uint256 amount = formula.calculateSaleReturn(tokenSupply, connectorBalance, connector.weight, _sellAmount);
+
+        // return the amount minus the conversion fee（退还金额减去转换费）
+        return getFinalAmount(amount, 1);
+	}
+
+ 	/**
+        @dev returns the expected return for selling one of the connector tokens for another connector token（返回购买另一个tokens的预期收益）
+        @param _fromConnectorToken  contract address of the connector token to convert from（要转换的连接器令牌的合同地址）
+        @param _toConnectorToken    contract address of the connector token to convert to（转换为的连接器令牌的转换地址）
+        @param _sellAmount          amount to sell (in the from connector token)（销售金额（在连接器令牌中））
+        @return expected sale return amount (in the to connector token)销售金额（在连接器令牌中）
+   	 */
+    function getCrossConnectorReturn(IERC20Token _fromConnectorToken, IERC20Token _toConnectorToken, uint256 _sellAmount)
+        public
+        view
+        active
+        validConnector(_fromConnectorToken)
+        validConnector(_toConnectorToken)
+        returns (uint256)
+    {
+        Connector storage fromConnector = connectors[_fromConnectorToken];
+        Connector storage toConnector = connectors[_toConnectorToken];
+        require(toConnector.isPurchaseEnabled); // validate input
+
+        uint256 fromConnectorBalance = getConnectorBalance(_fromConnectorToken);
+        uint256 toConnectorBalance = getConnectorBalance(_toConnectorToken);
+
+        IBancorFormula formula = IBancorFormula(registry.addressOf(ContractIds.BANCOR_FORMULA));
+        uint256 amount = formula.calculateCrossConnectorReturn(fromConnectorBalance, fromConnector.weight, toConnectorBalance, toConnector.weight, _sellAmount);
+
+        // return the amount minus the conversion fee
+        // the fee is higher (magnitude = 2) since cross connector conversion equals 2 conversions (from / to the smart token)
+        return getFinalAmount(amount, 2);
+	}
+
+ 	/**
+        @dev converts a specific amount of _fromToken to _toToken （转换一个特定的量_fromToken 到 _toToken）
+        @param _fromToken  ERC20 token to convert from（要转换的连接器令牌）
+        @param _toToken    ERC20 token to convert to（转换为的令牌）
+        @param _amount     amount to convert, in fromToken（从FoT中转换的金额）
+        @param _minReturn  if the conversion results in an amount smaller than the minimum return - it is cancelled, must be nonzero（如果转换结果小于最小返回量，则被取消，必须为非零）
+        @return conversion return amount（转换收益金额）
+    	*/
+    function convertInternal(IERC20Token _fromToken, IERC20Token _toToken, uint256 _amount, uint256 _minReturn)
+        public
+        bancorNetworkOnly
+        conversionsAllowed
+        greaterThanZero(_minReturn)
+        returns (uint256)
+    {
+        require(_fromToken != _toToken); // validate input
+
+        // conversion between the token and one of its connectors（令牌与其一个连接器之间的转换）
+        if (_toToken == token)
+            return buy(_fromToken, _amount, _minReturn);
+        else if (_fromToken == token)
+            return sell(_toToken, _amount, _minReturn);
+
+        // conversion between 2 connectors（2个连接器之间的转换）
+        uint256 amount = getCrossConnectorReturn(_fromToken, _toToken, _amount);
+        // ensure the trade gives something in return and meets the minimum requested amount（确保贸易给予回报并满足最低要求的数量）
+        require(amount != 0 && amount >= _minReturn);
+
+        // update the source token virtual balance if relevant（如果相关的话更新源令牌虚拟余额）
+        Connector storage fromConnector = connectors[_fromToken];
+        if (fromConnector.isVirtualBalanceEnabled)
+            fromConnector.virtualBalance = safeAdd(fromConnector.virtualBalance, _amount);
+
+        // update the target token virtual balance if relevant（如果相关，更新目标令牌虚拟余额）
+        Connector storage toConnector = connectors[_toToken];
+        if (toConnector.isVirtualBalanceEnabled)
+            toConnector.virtualBalance = safeSub(toConnector.virtualBalance, amount);
+
+        // ensure that the trade won't deplete the connector balance（确保交易不会耗尽连接器的平衡）
+        uint256 toConnectorBalance = getConnectorBalance(_toToken);
+        assert(amount < toConnectorBalance);
+
+        // transfer funds from the caller in the from connector token（从连接器令牌中向呼叫者转移资金）
+        assert(_fromToken.transferFrom(msg.sender, this, _amount));
+        // transfer funds to the caller in the to connector token（将资金转移到接线员令牌中的呼叫者）
+        // the transfer might fail if the actual connector balance is smaller than the virtual balance（如果实际连接器平衡小于虚拟平衡，传输可能会失败。）
+        assert(_toToken.transfer(msg.sender, amount));
+
+        // calculate conversion fee and dispatch the conversion event（计算转换费用并发送转换事件）
+        // the fee is higher (magnitude = 2) since cross connector conversion equals 2 conversions (from / to the smart token)（由于交叉连接器转换等于2（从/到智能令牌），费用更高（幅度＝2））
+        uint256 feeAmount = safeSub(amount, getFinalAmount(amount, 2));
+        dispatchConversionEvent(_fromToken, _toToken, _amount, amount, feeAmount);
+
+        // dispatch price data updates for the smart token / both connectors（智能令牌/两个连接器的调度价格数据更新）
+        emit PriceDataUpdate(_fromToken, token.totalSupply(), getConnectorBalance(_fromToken), fromConnector.weight);
+        emit PriceDataUpdate(_toToken, token.totalSupply(), getConnectorBalance(_toToken), toConnector.weight);
+        return amount;
+    	}
+
 
